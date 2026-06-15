@@ -1,4 +1,5 @@
 import { renderPage } from '/renderer.js';
+import { createVisualEditor } from '/editor.js';
 
 // ---- tiny helpers --------------------------------------------------------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -224,73 +225,15 @@ async function refreshPage() {
   renderApp();
 }
 
-// ---- Content tab (block/slot editor) ------------------------------------
+// ---- Content tab (visual drag-and-drop editor) --------------------------
 function renderContentTab(root) {
-  const slots = state.page.currentVersion.content.slots;
-  const draft = structuredClone(slots);
-  const container = el(`<div></div>`);
-  function redraw() {
-    container.replaceChildren();
-    for (const slot of Object.keys(draft)) {
-      const se = el(`<div class="slot-editor"><h4>${esc(slot)}</h4></div>`);
-      draft[slot].forEach((inst, i) => se.append(instanceEditor(slot, inst, i, draft, redraw)));
-      const add = el(`<div class="row"><select class="addWidget"></select><button class="small">+ Add</button></div>`);
-      const sel = $('.addWidget', add);
-      sel.replaceChildren(
-        el(`<option value="">— widget —</option>`),
-        ...state.widgets.map((w) => el(`<option value="w:${w.id}">${esc(w.name)} (${esc(w.type)})</option>`)),
-        ...state.shared.map((s) => el(`<option value="s:${s.id}">shared: ${esc(s.key)}</option>`)),
-      );
-      $('button', add).onclick = () => {
-        if (!sel.value) return;
-        const [kind, id] = sel.value.split(':');
-        if (kind === 'w') {
-          const w = state.widgets.find((x) => x.id === id);
-          draft[slot].push({ instanceId: `i${Date.now()}`, widgetId: w.id, type: w.type, props: defaultProps(w) });
-        } else {
-          draft[slot].push({ instanceId: `i${Date.now()}`, type: 'shared_ref', props: { sharedContentId: id } });
-        }
-        redraw();
-      };
-      se.append(add);
-      container.append(se);
-    }
-  }
-  redraw();
-  root.replaceChildren(container);
-  const save = el(`<button class="primary">Save (new version)</button>`);
-  save.onclick = async () => {
-    try {
-      await api(`/pages/${state.page.id}`, { method: 'PATCH', body: { content: { slots: draft }, note: 'Content edit' } });
-      toast('Saved new version'); await refreshPage();
-    } catch (e) { toast(e.message, true); }
-  };
-  root.append(el(`<div style="margin-top:12px"></div>`), save);
-}
-
-function defaultProps(widget) {
-  const props = {};
-  for (const [f, def] of Object.entries(widget.schema ?? {})) props[f] = def.default ?? '';
-  return props;
-}
-
-function instanceEditor(slot, inst, idx, draft, redraw) {
-  const box = el(`<div class="inst"><div class="row between"><span class="pill">${esc(inst.type)}</span><button class="small danger">remove</button></div></div>`);
-  $('button', box).onclick = () => { draft[slot].splice(idx, 1); redraw(); };
-  if (inst.type === 'shared_ref') {
-    const s = state.shared.find((x) => x.id === inst.props.sharedContentId);
-    box.append(el(`<div class="muted">→ ${esc(s?.key ?? inst.props.sharedContentId)}</div>`));
-    return box;
-  }
-  const widget = state.widgets.find((w) => w.id === inst.widgetId);
-  const fields = Object.keys(widget?.schema ?? { html: {} });
-  for (const f of fields) {
-    box.append(el(`<label>${esc(f)}</label>`));
-    const input = el(`<input value="${esc(inst.props?.[f] ?? '')}" />`);
-    input.oninput = () => { inst.props = inst.props || {}; inst.props[f] = input.value; };
-    box.append(input);
-  }
-  return box;
+  const editor = createVisualEditor({
+    state,
+    api,
+    toast,
+    onSaved: async () => { await refreshPage(); state.tab = 'content'; renderMain(); },
+  });
+  editor(root);
 }
 
 // ---- Metadata tab --------------------------------------------------------
@@ -327,16 +270,22 @@ function renderMetadataTab(root) {
 }
 
 // ---- Preview tab ---------------------------------------------------------
+function resolveInstanceClient(inst) {
+  if (inst.type === 'shared_ref') {
+    const s = state.shared.find((x) => x.id === inst.props.sharedContentId);
+    return { ...inst, resolved: s ? { data: s.data, type: s.type, revision: s.revision } : null };
+  }
+  if (inst.type === 'layout' && Array.isArray(inst.props?.cols)) {
+    const cols = inst.props.cols.map((children) => (children ?? []).map(resolveInstanceClient));
+    return { ...inst, props: { ...inst.props, cols } };
+  }
+  return inst;
+}
+
 function resolveClient(version) {
   const v = structuredClone(version);
   for (const slot of Object.keys(v.content.slots)) {
-    v.content.slots[slot] = v.content.slots[slot].map((inst) => {
-      if (inst.type === 'shared_ref') {
-        const s = state.shared.find((x) => x.id === inst.props.sharedContentId);
-        return { ...inst, resolved: s ? { data: s.data, type: s.type, revision: s.revision } : null };
-      }
-      return inst;
-    });
+    v.content.slots[slot] = v.content.slots[slot].map(resolveInstanceClient);
   }
   return v;
 }

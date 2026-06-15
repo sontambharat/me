@@ -53,6 +53,18 @@ export function seed(app) {
     category: 'marketing',
     schema: { label: { type: 'string', required: true }, url: { type: 'string', required: true } },
   });
+  build.createWidget(superAdmin, {
+    name: 'Image',
+    type: 'image',
+    category: 'media',
+    schema: { src: { type: 'string', required: true }, alt: { type: 'string' }, caption: { type: 'string' } },
+  });
+  build.createWidget(superAdmin, {
+    name: 'Testimonial',
+    type: 'testimonial',
+    category: 'content',
+    schema: { quote: { type: 'string', required: true }, author: { type: 'string', required: true }, role: { type: 'string' } },
+  });
 
   // Shared content fragment, referenced by id from pages.
   const disclaimer = build.createSharedContent(superAdmin, {

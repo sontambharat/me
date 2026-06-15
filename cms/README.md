@@ -77,11 +77,29 @@ test/        buildEngine.test.js · previewEngine.test.js
 
 **Build Engine (Phase 1)** — all ✅ items implemented:
 basic template builder (fixed slots + per-slot widget-type rules), page builder
-(block/slot editor, metadata, slug), multi-site isolation + site switcher,
-standard widget builder (schema + validation + preview), shared content
-(reference-by-id with automatic propagation to consumers), revision history
-(list + restore). Phase-2 items (external-API widgets, personalization, diff
-view, scheduled publish, template inheritance) are intentionally out.
+with a **visual drag-and-drop editor** (see below), multi-site isolation + site
+switcher, standard widget builder (schema + validation + preview), shared
+content (reference-by-id with automatic propagation to consumers), revision
+history (list + restore). Phase-2 items (external-API widgets, personalization,
+diff view, scheduled publish, template inheritance) are intentionally out.
+
+### Visual page builder (Content tab)
+
+A Sitefinity-style WYSIWYG editor (`public/editor.js`):
+
+- **Widget toolbox** — a categorised palette (Layout, Marketing, Content,
+  Media, Shared content). Drag a card onto the canvas, or click to add.
+- **Drop zones per slot** — every template slot is a live drop target; an
+  accent insertion line shows exactly where a widget will land.
+- **Drag to reorder / move** — grab the ⋮⋮ handle to reorder within a slot or
+  move a widget between slots and columns.
+- **Column layouts** — drop a 1/2/3/4-column layout container and nest widgets
+  inside each column (drop zones nest; shared refs resolve at any depth).
+- **Live WYSIWYG** — widgets render with real styling in place, not as
+  placeholder labels.
+- **Properties panel** — select a widget to edit its schema fields in the right
+  rail; edits update the canvas live. Duplicate/delete from each widget's
+  toolbar. Saving writes a new immutable version.
 
 **Preview Engine (Phase 1)** — all ✅ items implemented:
 in-CMS live preview (desktop/tablet/mobile), shareable tokenized links

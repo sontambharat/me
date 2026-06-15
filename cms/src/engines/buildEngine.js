@@ -351,15 +351,22 @@ export class BuildEngine {
   resolveVersion(version) {
     const content = structuredClone(version.content);
     for (const slot of Object.keys(content.slots ?? {})) {
-      content.slots[slot] = content.slots[slot].map((inst) => {
-        if (inst.type === 'shared_ref' && inst.props?.sharedContentId) {
-          const shared = this.store.byId('sharedContent', inst.props.sharedContentId);
-          return { ...inst, resolved: shared ? { data: shared.data, type: shared.type, revision: shared.revision } : null };
-        }
-        return inst;
-      });
+      content.slots[slot] = content.slots[slot].map((inst) => this._resolveInstance(inst));
     }
     return { ...version, content };
+  }
+
+  /** Resolve shared references anywhere in the tree, including nested layouts. */
+  _resolveInstance(inst) {
+    if (inst.type === 'shared_ref' && inst.props?.sharedContentId) {
+      const shared = this.store.byId('sharedContent', inst.props.sharedContentId);
+      return { ...inst, resolved: shared ? { data: shared.data, type: shared.type, revision: shared.revision } : null };
+    }
+    if (inst.type === 'layout' && Array.isArray(inst.props?.cols)) {
+      const cols = inst.props.cols.map((children) => (children ?? []).map((c) => this._resolveInstance(c)));
+      return { ...inst, props: { ...inst.props, cols } };
+    }
+    return inst;
   }
 
   // ---- internals ---------------------------------------------------------
@@ -386,6 +393,18 @@ export class BuildEngine {
     return { ...page, currentVersion: version };
   }
 
+  /** Validate a single instance's widget props, recursing into layout columns. */
+  _validateInstance(inst) {
+    if (inst.type === 'layout' && Array.isArray(inst.props?.cols)) {
+      for (const col of inst.props.cols) for (const child of col ?? []) this._validateInstance(child);
+      return;
+    }
+    if (inst.widgetId) {
+      const widget = this.store.byId('widgets', inst.widgetId);
+      if (widget) this.validateWidgetProps(widget, inst.props);
+    }
+  }
+
   _validateContent(templateId, content) {
     const template = this.getTemplate(templateId);
     if (!content?.slots) throw new ValidationError('Content must have slots');
@@ -395,14 +414,15 @@ export class BuildEngine {
       }
       const rule = template.schema?.[slot];
       for (const inst of content.slots[slot]) {
-        if (inst.type === 'shared_ref') continue;
+        // shared_ref and layout are structural containers, allowed in any slot.
+        if (inst.type === 'shared_ref' || inst.type === 'layout') {
+          this._validateInstance(inst);
+          continue;
+        }
         if (rule?.allowedWidgetTypes && !rule.allowedWidgetTypes.includes(inst.type)) {
           throw new ValidationError(`Widget type "${inst.type}" not allowed in slot "${slot}"`);
         }
-        if (inst.widgetId) {
-          const widget = this.store.byId('widgets', inst.widgetId);
-          if (widget) this.validateWidgetProps(widget, inst.props);
-        }
+        this._validateInstance(inst);
       }
     }
   }
@@ -432,10 +452,13 @@ function actualType(v) {
 }
 
 function versionReferencesShared(version, sharedId) {
+  const hit = (inst) => {
+    if (inst.type === 'shared_ref' && inst.props?.sharedContentId === sharedId) return true;
+    if (inst.type === 'layout') return (inst.props?.cols ?? []).some((col) => (col ?? []).some(hit));
+    return false;
+  };
   for (const slot of Object.values(version.content?.slots ?? {})) {
-    for (const inst of slot) {
-      if (inst.type === 'shared_ref' && inst.props?.sharedContentId === sharedId) return true;
-    }
+    if (slot.some(hit)) return true;
   }
   return false;
 }

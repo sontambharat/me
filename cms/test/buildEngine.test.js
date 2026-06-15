@@ -96,6 +96,53 @@ test('shared content updates propagate to consuming pages', () => {
   assert.equal(ref.resolved.data.html, '<p>Updated notice</p>');
 });
 
+test('nested column layouts: validation, shared resolution, and consumer tracking', () => {
+  const { app, editor, site, page } = fresh();
+  const richText = app.build.listWidgets(editor, site.id).find((w) => w.type === 'richtext');
+  const shared = app.build.listSharedContent(editor, page.siteId).find((c) => c.key === 'legal-disclaimer');
+
+  // A 2-column layout in the body slot, with a widget and a shared_ref nested inside columns.
+  app.build.updatePage(editor, page.id, {
+    content: {
+      slots: {
+        header: [], hero: [], footer: [],
+        body: [
+          {
+            instanceId: 'L1',
+            type: 'layout',
+            props: {
+              cols: [
+                [{ instanceId: 'c1', widgetId: richText.id, type: 'richtext', props: { html: '<p>left</p>' } }],
+                [{ instanceId: 'c2', type: 'shared_ref', props: { sharedContentId: shared.id } }],
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  // Consumer tracking must see the shared ref even though it is nested in a layout.
+  assert.ok(app.build.consumersOf(shared.id).includes(page.id));
+
+  // Resolution must recurse into layout columns.
+  const current = app.build.getPage(editor, page.id).currentVersion;
+  const resolved = app.build.resolveVersion(current);
+  const nested = resolved.content.slots.body[0].props.cols[1][0];
+  assert.equal(nested.resolved.data.html, '<p>© Acme Inc. All rights reserved.</p>');
+
+  // Nested widget props are still validated.
+  assert.throws(
+    () =>
+      app.build.updatePage(editor, page.id, {
+        content: { slots: { header: [], hero: [], footer: [], body: [
+          { instanceId: 'L2', type: 'layout', props: { cols: [[{ instanceId: 'x', widgetId: richText.id, type: 'richtext', props: {} }]] } },
+        ] } },
+      }),
+    (err) => err.details?.some((d) => /required/i.test(d)),
+  );
+});
+
 test('page state machine rejects illegal transitions', () => {
   const { app, editor, page } = fresh();
   assert.throws(() => app.build.transition(editor, page.id, 'published'), /Cannot move/i);

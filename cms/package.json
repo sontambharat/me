@@ -1,0 +1,16 @@
+{
+  "name": "multi-site-cms",
+  "version": "0.1.0",
+  "description": "Headless, engine-based multi-site CMS — Phase 1 MVP (Build + Preview engines).",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js",
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

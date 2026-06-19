@@ -1,5 +1,18 @@
 node_modules/
-data/*.json
-data/*.json.tmp
-*.log
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma / SQLite dev database
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+
+# Local media storage fallback (Azure Blob is used in production)
+storage/
+
+.env*.local
 .DS_Store
+*.log

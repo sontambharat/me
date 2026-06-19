@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Product UI palette (slate + indigo). Values are "R G B" for Tailwind. */
+  --brand: 79 70 229;
+  --brand-fg: 255 255 255;
+  --canvas: 247 248 250;
+  --surface: 255 255 255;
+  --muted: 100 116 139;
+  --line: 226 232 240;
+  --ink: 15 23 42;
+  --subtle: 241 245 249;
+}
+
+* {
+  border-color: rgb(var(--line));
+}
+body {
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, refined scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgb(203 213 225); border-radius: 99px; border: 2px solid rgb(var(--canvas)); }
+::-webkit-scrollbar-thumb:hover { background: rgb(148 163 184); }
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition
+           border border-line bg-surface text-ink hover:bg-subtle disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply border-transparent text-white hover:opacity-90;
+    background: rgb(var(--brand));
+    color: rgb(var(--brand-fg));
+  }
+  .btn-ghost { @apply border-transparent bg-transparent hover:bg-subtle; }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs rounded-md; }
+  .btn-danger { @apply text-red-600 hover:bg-red-50 border-transparent; }
+
+  .input {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink
+           outline-none transition placeholder:text-slate-400 focus:ring-2;
+  }
+  .input:focus { --tw-ring-color: rgb(var(--brand) / 0.35); border-color: rgb(var(--brand)); }
+  .label { @apply mb-1 block text-xs font-medium text-muted; }
+
+  .card { @apply rounded-xl2 border border-line bg-surface shadow-card; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs font-medium; }
+}
+
+/* Rich-text widget content */
+.prose-cms { @apply text-slate-700 leading-relaxed; }
+.prose-cms h1 { @apply text-3xl font-bold text-slate-900 mb-3; }
+.prose-cms h2 { @apply text-2xl font-semibold text-slate-900 mb-2 mt-1; }
+.prose-cms h3 { @apply text-lg font-semibold text-slate-900 mb-2; }
+.prose-cms p { @apply mb-3; }
+.prose-cms ul { @apply list-disc pl-5 mb-3; }
+.prose-cms a { color: rgb(var(--brand)); @apply underline; }
+
+/* State badges */
+.state-draft { @apply bg-slate-100 text-slate-600; }
+.state-in_review { @apply bg-amber-100 text-amber-700; }
+.state-approved { @apply bg-indigo-100 text-indigo-700; }
+.state-published { @apply bg-emerald-100 text-emerald-700; }
+.state-archived { @apply bg-slate-100 text-slate-400; }

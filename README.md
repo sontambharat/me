@@ -1,21 +1,21 @@
 # Multi-Site CMS
 
-A headless, engine-based CMS for managing content across multiple sites.
+A headless, engine-based CMS for managing content across multiple sites — with a
+visual drag-and-drop page builder, inline on-canvas editing, a media library,
+per-site theming, forms, navigation, and shareable previews.
 
-This repository contains the **Phase 1 MVP** — the **Build Engine** (authoring)
-and **Preview Engine** (collaborative review), built on a shared content graph
-and event bus.
+Built on the production stack: **Next.js + React + TypeScript + Prisma**, with
+**Azure Blob Storage** for media and **PostgreSQL** in production (**SQLite** for
+local development so it runs anywhere with no cloud setup).
 
 ➡️ **The application lives in [`cms/`](./cms/).** See [`cms/README.md`](./cms/README.md)
-for architecture, the MVP feature-coverage map, and the API reference.
+for the full feature list, architecture, and production (Postgres + Azure) setup.
 
 ## Quick start
 
 ```bash
 cd cms
-node server.js        # http://localhost:3000  (demo login: admin@demo.test / demo1234)
-npm test              # engine + workflow tests
+npm install
+npm run db:reset      # SQLite schema + demo data
+npm run dev           # http://localhost:3000  (login: admin@demo.test / demo1234)
 ```
-
-Zero runtime dependencies — runs on a bare Node.js (>=20) install with no
-database or external services.

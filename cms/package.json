@@ -1,16 +1,37 @@
 {
   "name": "multi-site-cms",
-  "version": "0.1.0",
-  "description": "Headless, engine-based multi-site CMS — Phase 1 MVP (Build + Preview engines).",
+  "version": "1.0.0",
+  "private": true,
   "type": "module",
-  "main": "server.js",
-  "engines": {
-    "node": ">=20"
-  },
   "scripts": {
-    "start": "node server.js",
-    "seed": "node seed.js",
-    "test": "node --test"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:reset": "prisma db push --force-reset && npm run seed",
+    "seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
-  "license": "MIT"
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.28.0",
+    "@prisma/client": "^6.19.3",
+    "next": "^15.5.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.0",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
 }

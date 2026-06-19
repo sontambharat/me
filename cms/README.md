@@ -1,160 +1,110 @@
-# Multi-Site CMS — Phase 1 MVP
+# Multi-Site CMS
 
-A headless, **engine-based** CMS for managing content across multiple sites. This
-repository implements the **Phase 1 MVP**: the **Build Engine** (authoring) and
-the **Preview Engine** (collaborative review), plus the shared **content graph**
-and **event bus** they communicate through.
+A headless, engine-based CMS for managing content across multiple sites, built
+on the production stack: **Next.js (App Router) + React + TypeScript + Prisma**,
+with **Azure Blob Storage** for media and **PostgreSQL** in production
+(**SQLite** for local/sandbox).
 
-It is written in plain Node.js with **zero runtime dependencies**, so it runs on
-a bare Node install with no database, build step, or external services:
+It ships a polished, product-grade UI with a **visual drag-and-drop page builder
+featuring inline on-canvas editing**, a **media library (DAM)**, **per-site
+theming and templates**, **forms, navigation and dynamic content-list widgets**,
+and **shareable, login-free previews** with annotated feedback.
+
+## Run it
 
 ```bash
 cd cms
-node server.js        # http://localhost:3000
-# Demo login: admin@demo.test / demo1234
-npm test              # 18 engine + workflow tests (node:test)
+npm install
+npm run db:reset      # create SQLite schema + seed demo data
+npm run dev           # http://localhost:3000
 ```
 
-On first run the store is empty, so a demo dataset is seeded automatically (two
-sites, users for every role, templates, widgets, shared content and pages).
+Sign in with one of the seeded accounts (password `demo1234`):
 
-## Why this shape
+| Account | Role |
+|---|---|
+| `admin@demo.test` | Super Admin (all sites) |
+| `editor@demo.test` | Editor (Acme) |
+| `reviewer@demo.test` | Reviewer (Acme) |
 
-The recommended production stack (Next.js + Fastify + PostgreSQL + S3 +
-Resend) needs infrastructure that isn't available in an ephemeral sandbox. To
-deliver something **actually runnable and testable**, this MVP keeps the same
-architecture and domain model but swaps the infrastructure for dependency-free
-equivalents behind narrow interfaces:
+For a production build: `npm run build && npm run start`.
 
-| Production (recommended) | This MVP | Swap point |
+## Tech stack
+
+| Layer | Technology | Notes |
 |---|---|---|
-| PostgreSQL | JSON document store (atomic writes) | `src/core/store.js` |
-| Redis / NATS event bus | in-process pub/sub | `src/core/eventBus.js` |
-| Resend / Postmark email | in-app outbox (logged + stored) | `src/notifications/outbox.js` |
-| Next.js CMS UI | vanilla JS SPA | `public/` |
-| WebSocket realtime | request/refresh | — |
+| App & API | Next.js 15 App Router, React 19, TypeScript | Server Components for auth/loads, Route Handlers for the API |
+| ORM / DB | Prisma 6 · SQLite (dev) → PostgreSQL (prod) | One schema; switch the `datasource` provider + `DATABASE_URL` |
+| Media / DAM | Azure Blob Storage · local-disk fallback | `src/lib/storage.ts` |
+| Auth | Cookie sessions (scrypt) + 5-role RBAC | `src/lib/auth.ts`, `src/lib/rbac.ts` |
+| Styling | Tailwind CSS, CSS-variable theming | Site themes recolor the product UI and the canvas |
 
-Each is isolated so a production build replaces the guts without touching the
-engines.
+### Going to production
 
-## Architecture
+- **Database** — in `prisma/schema.prisma` change `provider = "sqlite"` to
+  `"postgresql"` and point `DATABASE_URL` at your Postgres server, then
+  `prisma migrate deploy`. Structured columns are stored as JSON strings so the
+  switch needs no code changes (promote them to `jsonb` if you want querying).
+- **Media** — set `AZURE_STORAGE_CONNECTION_STRING` (and optionally
+  `AZURE_STORAGE_CONTAINER`). When present, uploads go to Azure Blob Storage;
+  when absent (sandbox) they fall back to `./storage` on disk. Same interface
+  either way (`putBlob` / `getBlob` / `deleteBlob`).
+- **Email** — review/preview notifications are written to an outbox table and
+  logged; wire `src/server/notify.ts` to Resend/Postmark/Azure Communication
+  Services.
 
-```
-        ┌──────────────┐         events          ┌────────────────┐
-        │ Build Engine │ ───────────────────────▶│ Preview Engine │
-        │  (authoring) │   page.updated, etc.    │   (review)     │
-        └──────┬───────┘◀─── reviewGate() ───────└───────┬────────┘
-               │                                          │
-               ▼                                          ▼
-        ┌──────────────────────────────────────────────────────┐
-        │     Shared Content Graph (store)  +  Event Bus        │
-        └──────────────────────────────────────────────────────┘
-```
+## Features
 
-- **Decoupling** — the Build Engine never imports the Preview Engine. It emits
-  events (`page.updated`, `page.state_changed`, …); the Preview Engine reacts
-  (notify reviewers, auto-expire links). The one explicit seam is the review
-  **approval gate**: Build asks Preview, via an injected `reviewGate(pageId)`
-  callback, whether reviewers have signed off before allowing `in_review →
-  approved`.
-- **Versioning** — every page edit creates a new immutable version. Restore is
-  append-only (it creates a fresh version from an old snapshot), so history is
-  never rewritten.
+**Visual page builder** (`/editor/[siteId]/[pageId]`)
+- Drag widgets from a categorised toolbox onto the canvas; drop zones on every
+  template slot with a live insertion indicator.
+- **Inline on-canvas editing** — click a hero headline, rich-text block, CTA or
+  testimonial and type directly on the page (rich text has a B/I/H2/link bar).
+- Drag the handle to reorder and move widgets between slots and **nested column
+  layouts** (1–4 columns, themselves drop targets).
+- Contextual **properties panel**, image picking from the media library, a
+  **form-field builder**, duplicate/delete, device-framed live preview, page
+  metadata/SEO, revision history with restore, and the page state machine
+  (Draft → In Review → Approved → Published → Archived).
 
-```
-src/
-  core/      store.js · eventBus.js · ids.js · errors.js
-  auth/      auth.js (scrypt + sessions) · rbac.js (5 roles)
-  engines/   buildEngine.js · previewEngine.js
-  notifications/ outbox.js
-  http/      server.js · router.js · routes.js
-  app.js     composition root (wires the engines + review gate)
-public/      index.html/app.js (CMS UI) · preview.html/preview.js (public preview) · renderer.js (shared)
-test/        buildEngine.test.js · previewEngine.test.js
-```
+**Media Library (DAM)** — drag-and-drop upload to Azure Blob (or local),
+grid browsing, delete, and an in-builder picker for image widgets.
 
-## MVP feature coverage
+**Templates & Theming** — create templates with chosen slot regions; brand each
+site (color, page background, logo) with a live preview. The active site's brand
+recolors the entire product UI.
 
-**Build Engine (Phase 1)** — all ✅ items implemented:
-basic template builder (fixed slots + per-slot widget-type rules), page builder
-with a **visual drag-and-drop editor** (see below), multi-site isolation + site
-switcher, standard widget builder (schema + validation + preview), shared
-content (reference-by-id with automatic propagation to consumers), revision
-history (list + restore). Phase-2 items (external-API widgets, personalization,
-diff view, scheduled publish, template inheritance) are intentionally out.
+**Forms, navigation & lists** — a Form widget with a visual field builder and a
+submissions inbox; a Navigation menu manager rendered by the Nav widget; and a
+dynamic Content-List widget that lists site pages.
 
-### Visual page builder (Content tab)
+**Preview & collaboration** — shareable tokenized preview links (expiry, revoke,
+view tracking), a polished public preview page (no login) with device emulation,
+**working forms**, and **pin-based annotated feedback** from guests.
 
-A Sitefinity-style WYSIWYG editor (`public/editor.js`):
+**Multi-site & RBAC** — isolated content per site, a workspace switcher, and five
+roles (Super Admin, Site Admin, Editor, Reviewer, Guest Reviewer) enforced in the
+service layer.
 
-- **Widget toolbox** — a categorised palette (Layout, Marketing, Content,
-  Media, Shared content). Drag a card onto the canvas, or click to add.
-- **Drop zones per slot** — every template slot is a live drop target; an
-  accent insertion line shows exactly where a widget will land.
-- **Drag to reorder / move** — grab the ⋮⋮ handle to reorder within a slot or
-  move a widget between slots and columns.
-- **Column layouts** — drop a 1/2/3/4-column layout container and nest widgets
-  inside each column (drop zones nest; shared refs resolve at any depth).
-- **Live WYSIWYG** — widgets render with real styling in place, not as
-  placeholder labels.
-- **Properties panel** — select a widget to edit its schema fields in the right
-  rail; edits update the canvas live. Duplicate/delete from each widget's
-  toolbar. Saving writes a new immutable version.
-
-**Preview Engine (Phase 1)** — all ✅ items implemented:
-in-CMS live preview (desktop/tablet/mobile), shareable tokenized links
-(24h/7d/custom/no-expiry, revoke, auto-expire on publish, view analytics),
-pin-based inline comments with threads + states (open/in-progress/resolved) and
-internal/external visibility, review request workflow (assign reviewers, email
-notification with link), approval/rejection gate (rejection requires a comment
-and returns the page to draft), and change notifications to in-flight reviewers
-when a page is edited mid-review. Lightweight per-link/per-page analytics and a
-CSV review-summary export are included.
-
-> Beyond the strict checklist, two Phase-2 niceties came along for free because
-> the model supported them: `@email` mentions in comments and emoji reactions.
-
-## Roles (RBAC)
-
-`super_admin` (all sites) · `site_admin` (one site) · `editor` (build/edit) ·
-`reviewer` (preview, comment, approve/reject) · `guest_reviewer` (view + comment
-via a shareable link, no account). Permissions are site-scoped; see
-`src/auth/rbac.js`.
-
-## HTTP API (selected)
+## Project structure
 
 ```
-POST   /api/auth/login                          → { token, user }
-GET    /api/sites                               GET/POST sites
-GET/POST /api/sites/:siteId/templates|widgets|shared-content|pages
-GET/PATCH /api/pages/:pageId                    read / edit (new version)
-POST   /api/pages/:pageId/transition            { state }
-GET    /api/pages/:pageId/versions              POST .../:versionId/restore
-POST   /api/pages/:pageId/preview-links         DELETE /api/preview-links/:id
-GET    /api/preview/:token                      public, no auth — records a view
-POST   /api/preview/:token/comments             guest comment via link
-GET/POST /api/pages/:pageId/comments            PATCH /api/comments/:id/state
-GET/POST /api/pages/:pageId/reviews             POST /api/reviews/:id/decision
-GET    /api/pages/:pageId/analytics             review-summary?format=csv
-GET    /api/outbox                              inspect notifications (no real mailer)
+prisma/schema.prisma        Full data model (sites, pages, versions, widgets,
+                            shared content, assets, nav, forms, preview, comments…)
+prisma/seed.ts              Demo data (two sites, roles, rich landing page)
+src/lib/                    prisma, auth, rbac, storage (Azure/local), content types, tree ops
+src/server/                 Domain services: build, preview, media, forms, notify
+src/app/api/                Route handlers (REST-ish JSON API)
+src/app/login               Sign-in
+src/app/s/[siteId]/         Authed app shell: pages, media, navigation, forms, settings
+src/app/editor/             Immersive page builder
+src/app/preview/[token]     Public, login-free preview
+src/components/             UI kit, shell, render (WidgetView/PageView), builder
 ```
 
-Authenticate with `Authorization: Bearer <token>`.
+## Notes & scope
 
-## Try the review loop
-
-1. Sign in as `editor@demo.test`, open **Summer Launch**, edit content, **Save**.
-2. **Share** tab → create a 7-day preview link, open it (no login) and leave a
-   pin comment as a guest.
-3. **Review** tab → request review from `reviewer@demo.test`. The page moves to
-   *In Review* and an email lands in the **Outbox**.
-4. Edit the page again — reviewers get a *change notification* (Outbox).
-5. Sign in as `reviewer@demo.test`, **Review** tab → Approve. The page advances
-   to *Approved* (the gate blocks editors from approving early). Publish it and
-   the preview links auto-expire.
-
-## Out of scope (later phases)
-
-Compile / Publish / Render engines, external-API & personalized widgets, A/B
-testing, password-protected links, preview-as-segment, i18n, and a real asset
-DAM — as listed in the requirements doc.
+This is the Phase-1 MVP scope (Build + Preview engines). The Compile, Publish and
+Render engines, external-API/personalized widgets, A/B testing and i18n remain
+out of scope. The reviewer approval workflow is present at the data layer and via
+preview comments; a dedicated review-management screen is a natural next step.
